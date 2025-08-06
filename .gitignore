@@ -3,3 +3,6 @@ build/*
 
 # .vscode dir
 .vscode/
+
+# header files (until finished)
+include/
