@@ -1,74 +1,78 @@
-#include <iostream>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <cstring>
-#include <string>
+#include <Client.hpp>
 
-int main(int argc, char *argv[]) {
-    // create socket with TCP protocol & IPv4
-    int client_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if(client_fd < 0) {
-        std::cerr << "Error creating socket" << std::endl;
-        return 1;
+/* ======= Private methods ======= */
+
+void Client::read_full(uint8_t* buffer, size_t len) {
+    while (len > 0) {
+        ssize_t rv = ::recv(fd, buffer, len, 0);
+        if (rv <= 0) {
+            if (rv == 0)
+                // EOF: The server closed the connection unexpectedly
+                throw std::runtime_error("Unexpected EOF from server");
+            else
+                net::die("recv()");
+        }
+
+        assert((size_t) rv <= len);
+        len -= (size_t)rv;
+        buffer += rv;
     }
+}
 
-    // connect to server
-    struct sockaddr_in server_addr;
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    server_addr.sin_port = htons(6379);
-    if(connect(client_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
-        std::cerr << "Error connecting to server" << std::endl;
-        return 2;
+void Client::write_all(const uint8_t* buffer, size_t len) {
+    while (len > 0) {
+        ssize_t rv = ::send(fd, buffer, len, 0);
+        if (rv <= 0)
+            net::die("send()");
+
+        assert((size_t) rv <= len);
+        len -= (size_t)rv;
+        buffer += rv;
     }
+}
 
-    std::cout << "Client connected to server..." << std::endl;
 
-    // buffer for receiving data
-    char buffer[1024];
+/* ======= Public methods ======= */
+
+Client::Client(const std::string& host, const uint16_t& port) {
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0)
+        net::die("socket()");
     
-    // receive the initial welcome message from server
-    ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    if(bytes_received < 0) {
-        std::cerr << "Error receiving welcome message from server" << std::endl;
-        close(client_fd);
-        return 3;
-    }
+    struct sockaddr_in addr {
+        .sin_family = AF_INET,
+        .sin_port = htons(port),
+        .sin_addr = { .s_addr = inet_addr(host.c_str()) }
+    };
 
-    buffer[bytes_received] = '\0';
-    std::cout << "Message from server: " << buffer;
+    if (connect(fd, (struct sockaddr*) &addr, sizeof(addr)) != 0)
+        net::die("connect()");
+    
+    std::cout << "Connected to server at " << host << ":" << port << std::endl;
+}
 
-    // get command from the user
-    std::string command;
-    std::cout << "Enter command: ";
-    std::getline(std::cin, command);
+void Client::send(const std::string& message) {
+    uint32_t len = message.length();
+    if(len > net::MAX_MSG)
+        throw std::runtime_error("Message too long");
+    
+    std::vector<uint8_t> buffer;
+    buffer.reserve(4 + len);
+    memcpy(buffer.data(), &len, 4);
+    memcpy(buffer.data() + 4, message.data(), len);
 
-    // This ensures the server can correctly parse the end of the command.
-    command += "\r\n";
+    write_all(buffer.data(), buffer.size());
+}
 
-    // send command to server
-    if(send(client_fd, command.c_str(), command.length(), 0) < 0) {
-        std::cerr << "Error sending command to server" << std::endl;
-        close(client_fd);
-        return 4;
-    }
+std::vector<uint8_t> Client::recv() {
+    uint32_t len = 0;
+    read_full(reinterpret_cast<uint8_t*> (&len), 4);
+    
+    if (len > net::MAX_MSG)
+        throw std::runtime_error("Received message too long");
 
-    // Clear the buffer before receiving the next message
-    memset(buffer, 0, sizeof(buffer));
-
-    // receive response from server
-    bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    if(bytes_received < 0) {
-        std::cerr << "Error receiving response from server" << std::endl;
-        close(client_fd);
-        return 5;
-    }
-
-    buffer[bytes_received] = '\0';
-    std::cout << "Response from server: " << buffer;
-
-    // close socket
-    close(client_fd);
-    return 0;
+    std::vector<uint8_t> buffer(len);
+    read_full(buffer.data(), len);
+    
+    return buffer;
 }

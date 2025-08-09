@@ -1,4 +1,4 @@
-#include "Network.hpp"
+#include <Network.hpp>
 using namespace net;
 
 static void net::die(const char* msg) {

@@ -15,6 +15,7 @@ namespace net {
     
     const int PORT = 6379;
     const std::string IP_ADDRESS = "127.0.0.1";
+    const size_t MAX_MSG = 32 << 20; // 32 MB maximum message size
 
     /** 
      * @brief Prints error message and exits with error code 1

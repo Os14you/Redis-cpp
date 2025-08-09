@@ -8,8 +8,6 @@
 
 using net::Connection;
 
-const size_t MAX_MSG = 32 << 20; // 32 MB maximum message size
-
 class Server {
 private:
     int server_fd;
