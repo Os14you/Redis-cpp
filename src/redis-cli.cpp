@@ -4,7 +4,7 @@ int main() {
     try {
         Client client("127.0.0.1", 6379); // Connect to the Redis port
 
-        std::vector<std::string> requests = { "PING", "GET mykey", "hello" };
+        std::vector<std::string> requests = { "PING", "GET mykey", "EXIT", "PING" };
 
         for (const auto& req : requests) {
             client.send(req);

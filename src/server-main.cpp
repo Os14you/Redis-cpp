@@ -8,11 +8,10 @@ protected:
     void onRequest(Connection& conn, const std::string& request) override {
         std::cout << "Redis Server received from (ID:" << conn.fd << "): " << request << std::endl;
         
-        if (request == "PING") {
-            conn.appendOutgoing("+PONG\r\n");
-        } else {
-            conn.appendOutgoing("-ERR unknown command\r\n");
-        }
+        if (request == "PING") conn.appendOutgoing("+PONG\r\n");
+        else if (request == "EXIT") conn.appendOutgoing("+OK\r\n"), conn.want_close = true;
+        
+        else conn.appendOutgoing("-ERR unknown command\r\n");
     }
 };
 
