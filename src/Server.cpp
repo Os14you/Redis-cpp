@@ -27,9 +27,9 @@ bool Server::process(Connection &client) {
     // Copy the 4 raw bytes from the header buffer into our integer variable
     // to decode the length of the upcoming message payload.
     memcpy(&payload_len, client.incoming.data(), 4);
-    if(payload_len > MAX_MSG) {
+    if(payload_len > net::MAX_MSG) {
         std::cerr << "Error: Received message length (" << payload_len
-                  << ") exceeds max size (" << MAX_MSG << ").\n";
+                  << ") exceeds max size (" << net::MAX_MSG << ").\n";
         client.want_close = true;
         return false;
     }
