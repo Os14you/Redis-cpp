@@ -4,7 +4,8 @@
 
 void Server::accept() {
     struct sockaddr_in client_addr;
-    int client_fd = ::accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
+    socklen_t client_addr_len = sizeof(client_addr);
+    int client_fd = ::accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 
     if(client_fd < 0) {
         if(errno != EAGAIN && errno != EWOULDBLOCK)
@@ -13,7 +14,7 @@ void Server::accept() {
         return; // No new connection or an error occurred
     }
     
-    std::unique_ptr<Connection> client = std::make_unique<Connection>(client_fd);
+    std::unique_ptr<Connection> client = std::make_unique<Connection>(client_fd, client_addr);
     std::cout << "New client connected (ID:" << client_fd << "): " << client->getAddress() << std::endl;
 
     clients[client_fd] = std::move(client);
@@ -47,6 +48,11 @@ bool Server::process(Connection &client) {
     
     // Remove the processed message from the incoming buffer
     client.consumeIncoming(4 + payload_len);
+
+    if (!client.outgoing.empty()) {
+        client.want_write = true;
+    }
+
     return true; // Successfully processed one request
 }
 
@@ -204,7 +210,7 @@ void Server::run() {
             if(it == clients.end()) continue;
 
             Connection& client = *it->second;
-            if(poll_fds[i].revents & POLLIN ) assert(client.want_read ), process(client);
+            if(poll_fds[i].revents & POLLIN ) assert(client.want_read ), recv(client);
             if(poll_fds[i].revents & POLLOUT) assert(client.want_write), send(client);
             if(poll_fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) client.want_close = true;
 

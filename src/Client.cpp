@@ -42,7 +42,8 @@ Client::Client(const std::string& host, const uint16_t& port) {
     struct sockaddr_in addr {
         .sin_family = AF_INET,
         .sin_port = htons(port),
-        .sin_addr = { .s_addr = inet_addr(host.c_str()) }
+        .sin_addr = { .s_addr = inet_addr(host.c_str()) },
+        .sin_zero = {}
     };
 
     if (connect(fd, (struct sockaddr*) &addr, sizeof(addr)) != 0)
@@ -57,7 +58,7 @@ void Client::send(const std::string& message) {
         throw std::runtime_error("Message too long");
     
     std::vector<uint8_t> buffer;
-    buffer.reserve(4 + len);
+    buffer.resize(4 + len); 
     memcpy(buffer.data(), &len, 4);
     memcpy(buffer.data() + 4, message.data(), len);
 
@@ -75,4 +76,11 @@ std::vector<uint8_t> Client::recv() {
     read_full(buffer.data(), len);
     
     return buffer;
+}
+
+Client::~Client() {
+    if (fd >= 0) {
+        close(fd);
+        std::cout << "Connection closed." << std::endl;
+    }
 }

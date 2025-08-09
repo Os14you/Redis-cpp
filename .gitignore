@@ -1,5 +1,6 @@
 # build files
 build/*
+bin/*
 
 # .vscode dir
 .vscode/

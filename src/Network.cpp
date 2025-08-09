@@ -1,11 +1,11 @@
 #include <Network.hpp>
 using namespace net;
 
-static void net::die(const char* msg) {
+void net::die(const char* msg) {
     throw std::runtime_error(std::string(msg) + ": " + strerror(errno));
 }
 
-static void net::set_nonblocking(int fd) {
+void net::set_nonblocking(int fd) {
     errno = 0;
     int flags = fcntl(fd, F_GETFL, 0);
     if (errno)
@@ -17,7 +17,7 @@ static void net::set_nonblocking(int fd) {
         die("fcntl(F_SETFL)");
 }
 
-Connection::Connection(const int& client_fd): fd(client_fd), want_read(true) {
+Connection::Connection(const int& client_fd, const struct sockaddr_in& client_addr): addr(client_addr), fd(client_fd), want_read(true) {
     set_nonblocking(fd);
 }
 

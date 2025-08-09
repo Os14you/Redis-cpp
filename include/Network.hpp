@@ -22,14 +22,14 @@ namespace net {
      * @param msg Error message
      * @throws std::runtime_error
      */
-    static void die(const char* msg);
+    void die(const char* msg);
 
     /**
      * @brief Sets the file descriptor to be non-blocking
      * @param fd File descriptor
      * @returns void
      */
-    static void set_nonblocking(int fd);
+    void set_nonblocking(int fd);
 
     class Connection {
     private:
@@ -53,7 +53,7 @@ namespace net {
          * @returns void
          * @throws std::runtime_error
          */
-        Connection(const int& client_fd);
+        Connection(const int& client_fd, const struct sockaddr_in& client_addr);
 
         /**
          * @brief Appends data to the outgoing buffer to be sent
