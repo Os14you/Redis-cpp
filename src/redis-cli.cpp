@@ -1,16 +1,20 @@
 #include <Client.hpp>
+#include <vector>
+#include <string>
+#include <iostream>
+#include <cstring>
 
 int main() {
     try {
         Client client("127.0.0.1", 6379); // Connect to the Redis port
 
         std::vector<std::vector<std::string>> requests = {
-            {"SET", "OSAMA", "is the best"},
+            {"SET", "OSAMA", "best"},
             {"GET", "OSAMA"},
             {"DEL", "OSAMA"},
             {"GET", "OSAMA"},
             {"PING"},
-            {"ECHO", "Hello, Redis!"}
+            {"ECHO", "Hello, Redis!"} // Note: ECHO is not implemented yet
         };
 
         for (const auto& req : requests) {
@@ -18,24 +22,26 @@ int main() {
             for(const auto& s : req) { std::cout << s << " "; }
             std::cout << std::endl;
 
-            // The API is now much cleaner!
             client.send(req);
 
             std::vector<uint8_t> res = client.recv();
 
-            // The response from the server is also length-prefixed with a status
-            if (res.size() < 8) {
+            // The response payload must have at least 4 bytes for the status code.
+            if (res.size() < 4) {
                 std::cerr << "Invalid response received" << std::endl;
                 continue;
             }
 
             uint32_t status;
-            memcpy(&status, res.data() + 4, 4);
+            // The status code is at the BEGINNING of the response buffer (offset 0).
+            memcpy(&status, res.data(), 4);
 
             std::cout << "Received Status: " << status;
-            if (res.size() > 8)
-                 std::cout << ", Data: " << std::string(res.begin() + 8, res.end());
-            
+            // The data (if any) starts right AFTER the 4-byte status code.
+            if (res.size() > 4) {
+                 std::cout << ", Data: " << std::string(res.begin() + 4, res.end());
+            }
+
             std::cout << std::endl << "---" << std::endl;
         }
 

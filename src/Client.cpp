@@ -53,24 +53,22 @@ Client::Client(const std::string& host, const uint16_t& port) {
 }
 
 void Client::send(const std::vector<std::string>& cmd) {
+    std::vector<uint8_t> payload;
     uint32_t nstr = cmd.size();
-    std::vector<uint8_t> buffer;
-
-    // Append number of strings
-    buffer.insert(buffer.end(), reinterpret_cast<uint8_t*>(&nstr), reinterpret_cast<uint8_t*>(&nstr) + 4);
+    payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&nstr), reinterpret_cast<uint8_t*>(&nstr) + 4);
 
     for (const auto& s : cmd) {
         uint32_t len = s.length();
-        if (len > net::MAX_MSG)
-            throw std::runtime_error("Message part too long");
-            
-        // Append string length
-        buffer.insert(buffer.end(), reinterpret_cast<uint8_t*>(&len), reinterpret_cast<uint8_t*>(&len) + 4);
-        // Append string data
-        buffer.insert(buffer.end(), s.begin(), s.end());
+        payload.insert(payload.end(), reinterpret_cast<uint8_t*>(&len), reinterpret_cast<uint8_t*>(&len) + 4);
+        payload.insert(payload.end(), s.begin(), s.end());
     }
 
-    write_all(buffer.data(), buffer.size());
+    std::vector<uint8_t> final_message;
+    uint32_t total_len = payload.size();
+    final_message.insert(final_message.end(), reinterpret_cast<uint8_t*>(&total_len), reinterpret_cast<uint8_t*>(&total_len) + 4);
+    final_message.insert(final_message.end(), payload.begin(), payload.end());
+
+    write_all(final_message.data(), final_message.size());
 }
 
 std::vector<uint8_t> Client::recv() {

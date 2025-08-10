@@ -1,19 +1,4 @@
-#include <Server.hpp>
-
-class RedisServer : public Server {
-public:
-    using Server::Server; // Inherit constructor
-
-protected:
-    void onRequest(Connection& conn, const std::string& request) override {
-        std::cout << "Redis Server received from (ID:" << conn.fd << "): " << request << std::endl;
-        
-        if (request == "PING") conn.appendOutgoing("+PONG\r\n");
-        else if (request == "EXIT") conn.appendOutgoing("+OK\r\n"), conn.want_close = true;
-        
-        else conn.appendOutgoing("-ERR unknown command\r\n");
-    }
-};
+#include <Redis.hpp>
 
 int main() {
     try {

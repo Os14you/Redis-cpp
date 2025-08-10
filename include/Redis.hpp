@@ -13,12 +13,28 @@ enum {
 // Structure to hold a parsed request command
 struct Request {
     std::vector<std::string> command;
+    
+    /**
+     * @brief Returns a lowercase copy of a command part.
+     * @param index The index of the command part to convert (default is 0 for the command itself).
+     * @return A new string containing the lowercase version of the command part.
+     */
+    std::string lowerCaseCommand(size_t index = 0) const {
+        // Return an empty string if the command vector is empty or the index is out of bounds.
+        if (command.empty() || index >= command.size()) {
+            return "";
+        }
 
-    std::string lowerCaseCommand(int index = 0) const {
-        if(!command.empty())
-            std::transform(command[0].begin(), command[0].end(), command[0].begin(), ::tolower);
-        
-        return command[0];
+        // 1. Create a copy of the original string.
+        std::string lower_cmd = command[index];
+
+        // 2. Transform the COPY to lowercase.
+        //    Using a lambda is the safest way to call std::tolower.
+        std::transform(lower_cmd.begin(), lower_cmd.end(), lower_cmd.begin(),
+                       [](unsigned char c){ return std::tolower(c); });
+
+        // 3. Return the new lowercase string.
+        return lower_cmd;
     }
 };
 

@@ -3,12 +3,29 @@
 /* ====== Private methods ====== */
 
 void RedisServer::onRequest(Connection& conn, const std::string& request) {
-    std::cout << "Redis Server received from (ID:" << conn.fd << "): " << request << std::endl;
-    
-    if (request == "PING") conn.appendOutgoing("+PONG\r\n");
-    else if (request == "EXIT") conn.appendOutgoing("+OK\r\n"), conn.want_close = true;
-    
-    else conn.appendOutgoing("-ERR unknown command\r\n");
+    Request parsed_request;
+    Response response;
+
+    // 1. Parse the raw binary data from the client.
+    if (parseRequest(request, parsed_request) != 0) {
+        // If parsing fails, create a proper Response object for the error.
+        response.status = RES_ERR;
+        const char* msg = "ERR Protocol error";
+        response.data.assign(reinterpret_cast<const uint8_t*>(msg), reinterpret_cast<const uint8_t*>(msg) + strlen(msg));
+    } else {
+        // 2. If parsing succeeds, execute the command.
+        executeRequest(parsed_request, response);
+    }
+
+    // 3. ALWAYS serialize the final response object.
+    serializeResponse(response, conn.outgoing);
+
+    // If parsing failed, we still want to close the connection.
+    if (response.status != RES_OK && response.status != RES_NX) {
+        if (std::string(response.data.begin(), response.data.end()).find("Protocol error") != std::string::npos) {
+             conn.want_close = true;
+        }
+    }
 }
 
 bool RedisServer::parseUInt32(const char*& cursor, const char* buffer_end, uint32_t& value) {
