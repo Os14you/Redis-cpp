@@ -52,15 +52,23 @@ Client::Client(const std::string& host, const uint16_t& port) {
     std::cout << "Connected to server at " << host << ":" << port << std::endl;
 }
 
-void Client::send(const std::string& message) {
-    uint32_t len = message.length();
-    if(len > net::MAX_MSG)
-        throw std::runtime_error("Message too long");
-    
+void Client::send(const std::vector<std::string>& cmd) {
+    uint32_t nstr = cmd.size();
     std::vector<uint8_t> buffer;
-    buffer.resize(4 + len); 
-    memcpy(buffer.data(), &len, 4);
-    memcpy(buffer.data() + 4, message.data(), len);
+
+    // Append number of strings
+    buffer.insert(buffer.end(), reinterpret_cast<uint8_t*>(&nstr), reinterpret_cast<uint8_t*>(&nstr) + 4);
+
+    for (const auto& s : cmd) {
+        uint32_t len = s.length();
+        if (len > net::MAX_MSG)
+            throw std::runtime_error("Message part too long");
+            
+        // Append string length
+        buffer.insert(buffer.end(), reinterpret_cast<uint8_t*>(&len), reinterpret_cast<uint8_t*>(&len) + 4);
+        // Append string data
+        buffer.insert(buffer.end(), s.begin(), s.end());
+    }
 
     write_all(buffer.data(), buffer.size());
 }

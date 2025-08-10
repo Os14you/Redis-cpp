@@ -39,11 +39,12 @@ public:
     Client(const std::string& host, const uint16_t& port);
 
     /**
-     * @brief Sends a message to the server
-     * @param message Message to send
-     * @returns void
+     * @brief Sends a command to the server, formatted as a vector of strings.
+     * @details This is the primary method for sending commands. It serializes
+     * the command vector into the length-prefixed format expected by the server.
+     * @param cmd The command to send, with each part as an element in the vector.
      */
-    void send(const std::string& message);
+    void send(const std::vector<std::string>& cmd);
 
     /**
      * @brief Receives a message from the server
