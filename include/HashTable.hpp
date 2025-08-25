@@ -32,6 +32,8 @@ public:
      * to handle collisions.
      */
     struct Node {
+        virtual ~Node() = default;
+        
         std::unique_ptr<Node> next = nullptr;
         uint64_t hashCode = 0;
     };

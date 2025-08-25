@@ -80,6 +80,11 @@ void RedisServer::executeRequest(const Request& request, Response& response) {
     }
 
     const std::string& cmd = request.lowerCaseCommand();
+    auto equals = [](HashTable::Node* node, HashTable::Node* key) {
+        DataEntry* entry1 = static_cast<DataEntry*>(node);
+        DataEntry* entry2 = static_cast<DataEntry*>(key);
+        return entry1->key == entry2->key;
+    };
 
     if(cmd == "ping") {
         response.status = RES_OK;
@@ -89,7 +94,7 @@ void RedisServer::executeRequest(const Request& request, Response& response) {
             reinterpret_cast<const uint8_t*>(pong_msg) + strlen(pong_msg)
         );
     } else if(cmd == "get") {
-        if(request.command.size() < 2) {
+        if(request.command.size() != 2) {
             response.status = RES_ERR;
             const char* error_msg = "ERR wrong number of arguments for 'get' command";
             response.data.assign(
@@ -99,13 +104,18 @@ void RedisServer::executeRequest(const Request& request, Response& response) {
             return;
         }
 
-        auto it = g_data.find(request.command[1]);
-        if(it != g_data.end()) {
-            response.data.assign(it->second.begin(), it->second.end());
+        DataEntry key_entry;
+        key_entry.key = request.command[1];
+        key_entry.hashCode = stringHash(key_entry.key);
+
+        HashTable::Node* found_node = dataStore.lookup(&key_entry, equals);
+        if(found_node) {
+            DataEntry* entry = static_cast<DataEntry*>(found_node);
+            response.data.assign(entry->value.begin(), entry->value.end());
             response.status = RES_OK;
+        } else {
+            response.status = RES_NX;
         }
-        else
-            response.status = RES_NX; // Not found
     
     } else if(cmd == "set") {
         if(request.command.size() != 3) {
@@ -118,12 +128,25 @@ void RedisServer::executeRequest(const Request& request, Response& response) {
             return;
         }
 
-        g_data[request.command[1]] = request.command[2];
-        response.status = RES_OK;
+        DataEntry key_entry;
+        key_entry.key = request.command[1];
+        key_entry.hashCode = stringHash(key_entry.key);
 
+        HashTable::Node* found_node = dataStore.lookup(&key_entry, equals);
+        if(found_node) {
+            static_cast<DataEntry*>(found_node)->value = request.command[2];
+        } else {
+            auto new_entry = std::make_unique<DataEntry>();
+            new_entry->key = request.command[1];
+            new_entry->value = request.command[2];
+            new_entry->hashCode = key_entry.hashCode;
+            dataStore.insert(std::move(new_entry));
+        }
+
+        response.status = RES_OK;
         const char* ok_msg = "+OK\r\n";
         response.data.assign(
-            reinterpret_cast<const uint8_t*>(ok_msg), 
+            reinterpret_cast<const uint8_t*>(ok_msg),
             reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
         );
 
@@ -138,7 +161,12 @@ void RedisServer::executeRequest(const Request& request, Response& response) {
             return;
         }
 
-        g_data.erase(request.command[1]);
+        DataEntry key_entry;
+        key_entry.key = request.command[1];
+        key_entry.hashCode = stringHash(key_entry.key);
+
+        std::unique_ptr<HashTable::Node> removed_node = dataStore.remove(&key_entry, equals);
+        
         response.status = RES_OK;
         const char* ok_msg = "+OK\r\n";
         response.data.assign(
@@ -154,6 +182,16 @@ void RedisServer::executeRequest(const Request& request, Response& response) {
             reinterpret_cast<const uint8_t*>(error_msg.c_str()) + error_msg.size()
         );
     }
+}
+
+// FNV-1a hash function for strings
+uint64_t RedisServer::stringHash(const std::string& str) {
+    uint64_t hash = 0xcdf29ce484222325;
+    for(char c: str) {
+        hash ^= static_cast<uint64_t>(c);
+        hash *= 0x100000001b3;
+    }
+    return hash;
 }
 
 void RedisServer::serializeResponse(const Response& response, std::vector<uint8_t>& output_buffer) {

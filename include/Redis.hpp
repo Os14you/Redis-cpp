@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Server.hpp"
+#include "HashTable.hpp"
 #include <algorithm>
 
 // Response status codes
@@ -44,14 +45,18 @@ struct Response {
     std::vector<uint8_t> data;
 };
 
-// Placeholder for the key-value data store
-static std::unordered_map<std::string, std::string> g_data;
+struct DataEntry: public HashTable::Node {
+    std::string key;
+    std::string value;
+};
 
 class RedisServer : public Server {
 public:
     using Server::Server; // Inherit constructor
 
 private:
+    HashTable dataStore;
+
     /**
      * @brief Handles incoming requests from clients.
      * @param conn The client connection that sent the request.
@@ -96,6 +101,8 @@ private:
      * with the result of the command execution.
      */
     void executeRequest(const Request& request, Response& response);
+
+    static uint64_t stringHash(const std::string& str);
 
     /**
      * @brief Serializes a Response object into a byte vector for network transmission.
