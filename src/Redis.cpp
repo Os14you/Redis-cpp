@@ -80,108 +80,123 @@ void RedisServer::executeRequest(const Request& request, Response& response) {
     }
 
     const std::string& cmd = request.lowerCaseCommand();
+    auto it = commandTable.find(cmd);
+
+    if(it != commandTable.end()) {
+        it->second(request, response);
+    } else {
+        handleUnknown(request, response);
+    }
+}
+
+void RedisServer::handlePing(const Request& request, Response& response) {
+    (void) request; // Unused parameter
+    const char* pong_msg = "+PONG\r\n";
+    response.status = RES_OK;
+    response.data.assign(
+        reinterpret_cast<const uint8_t*>(pong_msg), 
+        reinterpret_cast<const uint8_t*>(pong_msg) + strlen(pong_msg)
+    );
+}
+
+void RedisServer::handleUnknown(const Request& request, Response& response) {
+    response.status = RES_ERR;
+    std::string error_msg = "ERR unknown command '" + request.command[0] + "'";
+    response.data.assign(error_msg.begin(), error_msg.end());
+}
+
+void RedisServer::handleSet(const Request& request, Response& response) {
+    if(request.command.size() != 3) {
+        response.status = RES_ERR;
+        const char* error_msg = "ERR wrong number of arguments for 'set'";
+        response.data.assign(
+            reinterpret_cast<const uint8_t*>(error_msg), 
+            reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
+        );
+        return;
+    }
+
+    DataEntry key_entry;
+    key_entry.key = request.command[1];
+    key_entry.hashCode = stringHash(key_entry.key);
+
     auto equals = [](HashTable::Node* node, HashTable::Node* key) {
-        DataEntry* entry1 = static_cast<DataEntry*>(node);
-        DataEntry* entry2 = static_cast<DataEntry*>(key);
-        return entry1->key == entry2->key;
+        return static_cast<DataEntry*>(node)->key == static_cast<DataEntry*>(key)->key;
     };
 
-    if(cmd == "ping") {
-        response.status = RES_OK;
-        const char* pong_msg = "+PONG\r\n";
-        response.data.assign(
-            reinterpret_cast<const uint8_t*>(pong_msg), 
-            reinterpret_cast<const uint8_t*>(pong_msg) + strlen(pong_msg)
-        );
-    } else if(cmd == "get") {
-        if(request.command.size() != 2) {
-            response.status = RES_ERR;
-            const char* error_msg = "ERR wrong number of arguments for 'get' command";
-            response.data.assign(
-                reinterpret_cast<const uint8_t*>(error_msg), 
-                reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
-            );
-            return;
-        }
-
-        DataEntry key_entry;
-        key_entry.key = request.command[1];
-        key_entry.hashCode = stringHash(key_entry.key);
-
-        HashTable::Node* found_node = dataStore.lookup(&key_entry, equals);
-        if(found_node) {
-            DataEntry* entry = static_cast<DataEntry*>(found_node);
-            response.data.assign(entry->value.begin(), entry->value.end());
-            response.status = RES_OK;
-        } else {
-            response.status = RES_NX;
-        }
-    
-    } else if(cmd == "set") {
-        if(request.command.size() != 3) {
-            response.status = RES_ERR;
-            const char* error_msg = "ERR wrong number of arguments for 'set' command";
-            response.data.assign(
-                reinterpret_cast<const uint8_t*>(error_msg), 
-                reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
-            );
-            return;
-        }
-
-        DataEntry key_entry;
-        key_entry.key = request.command[1];
-        key_entry.hashCode = stringHash(key_entry.key);
-
-        HashTable::Node* found_node = dataStore.lookup(&key_entry, equals);
-        if(found_node) {
-            static_cast<DataEntry*>(found_node)->value = request.command[2];
-        } else {
-            auto new_entry = std::make_unique<DataEntry>();
-            new_entry->key = request.command[1];
-            new_entry->value = request.command[2];
-            new_entry->hashCode = key_entry.hashCode;
-            dataStore.insert(std::move(new_entry));
-        }
-
-        response.status = RES_OK;
-        const char* ok_msg = "+OK\r\n";
-        response.data.assign(
-            reinterpret_cast<const uint8_t*>(ok_msg),
-            reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
-        );
-
-    } else if(cmd == "del") {
-        if(request.command.size() < 2) {
-            response.status = RES_ERR;
-            const char* error_msg = "ERR wrong number of arguments for 'del' command";
-            response.data.assign(
-                reinterpret_cast<const uint8_t*>(error_msg),
-                reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
-            );
-            return;
-        }
-
-        DataEntry key_entry;
-        key_entry.key = request.command[1];
-        key_entry.hashCode = stringHash(key_entry.key);
-
-        std::unique_ptr<HashTable::Node> removed_node = dataStore.remove(&key_entry, equals);
-        
-        response.status = RES_OK;
-        const char* ok_msg = "+OK\r\n";
-        response.data.assign(
-            reinterpret_cast<const uint8_t*>(ok_msg),
-            reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
-        );
-
+    if(HashTable::Node* found_node = dataStore.lookup(&key_entry, equals)) {
+        static_cast<DataEntry*>(found_node)->value = request.command[2];
     } else {
-        response.status = RES_ERR;
-        std::string error_msg = "ERR unknown '" + cmd + "'";
-        response.data.assign(
-            reinterpret_cast<const uint8_t*>(error_msg.c_str()), 
-            reinterpret_cast<const uint8_t*>(error_msg.c_str()) + error_msg.size()
-        );
+        auto new_entry = std::make_unique<DataEntry>();
+        new_entry->key = request.command[1];
+        new_entry->value = request.command[2];
+        new_entry->hashCode = key_entry.hashCode;
+        dataStore.insert(std::move(new_entry));
     }
+
+    response.status = RES_OK;
+    const char* ok_msg = "+OK\r\n";
+    response.data.assign(
+        reinterpret_cast<const uint8_t*>(ok_msg),
+        reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
+    );
+}
+
+void RedisServer::handleGet(const Request& request, Response& response) {
+    if(request.command.size() != 2) {
+        response.status = RES_ERR;
+        const char* error_msg = "ERR wrong number of arguments for 'get'";
+        response.data.assign(
+            reinterpret_cast<const uint8_t*>(error_msg),
+            reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
+        );
+        return;
+    }
+
+    DataEntry key_entry;
+    key_entry.key = request.command[1];
+    key_entry.hashCode = stringHash(key_entry.key);
+
+    auto equals = [](HashTable::Node* node, HashTable::Node* key) {
+        return static_cast<DataEntry*>(node)->key == static_cast<DataEntry*>(key)->key;
+    };
+
+    if(HashTable::Node* found_node = dataStore.lookup(&key_entry, equals)) {
+        DataEntry* entry = static_cast<DataEntry*>(found_node);
+        response.data.assign(entry->value.begin(), entry->value.end());
+        response.status = RES_OK;
+    } else {
+        response.status = RES_NX;
+    }
+}
+
+void RedisServer::handleDel(const Request& request, Response& response) {
+    if(request.command.size() != 2) {
+        response.status = RES_ERR;
+        const char* error_msg = "ERR wrong number of arguments for 'del'";
+        response.data.assign(
+            reinterpret_cast<const uint8_t*>(error_msg),
+            reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
+        );
+        return;
+    }
+
+    DataEntry key_entry;
+    key_entry.key = request.command[1];
+    key_entry.hashCode = stringHash(key_entry.key);
+
+    auto equals = [](HashTable::Node* node, HashTable::Node* key) {
+        return static_cast<DataEntry*>(node)->key == static_cast<DataEntry*>(key)->key;
+    };
+
+    dataStore.remove(&key_entry, equals);
+    
+    response.status = RES_OK;
+    const char* ok_msg = "+OK\r\n";
+    response.data.assign(
+        reinterpret_cast<const uint8_t*>(ok_msg),
+        reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
+    );
 }
 
 // FNV-1a hash function for strings
@@ -217,4 +232,15 @@ void RedisServer::serializeResponse(const Response& response, std::vector<uint8_
         response.data.begin(),
         response.data.end()
     );
+}
+
+/* ====== Public methods ====== */
+
+RedisServer::RedisServer(uint16_t port) : Server(port) {
+    commandTable = {
+        {"get",  [this](const Request& req, Response& res) { handleGet(req, res);  }},
+        {"set",  [this](const Request& req, Response& res) { handleSet(req, res);  }},
+        {"del",  [this](const Request& req, Response& res) { handleDel(req, res);  }},
+        {"ping", [this](const Request& req, Response& res) { handlePing(req, res); }},
+    };
 }

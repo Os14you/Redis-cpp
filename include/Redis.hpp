@@ -52,10 +52,19 @@ struct DataEntry: public HashTable::Node {
 
 class RedisServer : public Server {
 public:
-    using Server::Server; // Inherit constructor
+    RedisServer(uint16_t port);
 
 private:
     HashTable dataStore;
+
+    using CommandHandler = std::function<void(const Request&, Response&)>;
+    std::unordered_map<std::string, CommandHandler> commandTable;
+
+    void handleGet(const Request& request, Response& response);
+    void handleSet(const Request& request, Response& response);
+    void handleDel(const Request& request, Response& response);
+    void handlePing(const Request& request, Response& response);
+    void handleUnknown(const Request& request, Response& response);
 
     /**
      * @brief Handles incoming requests from clients.
