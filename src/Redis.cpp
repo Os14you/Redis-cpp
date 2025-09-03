@@ -28,6 +28,20 @@ void RedisServer::onRequest(Connection& conn, const std::string& request) {
     }
 }
 
+void RedisServer::sendError(Response& response, const std::string& message) {
+    response.status = RES_ERR;
+    response.data.assign(message.begin(), message.end());
+}
+
+void RedisServer::sendOK(Response& response) {
+    response.status = RES_OK;
+    const char* ok_msg = "+OK\r\n";
+    response.data.assign(
+        reinterpret_cast<const uint8_t*>(ok_msg),
+        reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
+    );
+}
+
 bool RedisServer::parseUInt32(const char*& cursor, const char* buffer_end, uint32_t& value) {
     if(cursor + 4 > buffer_end)
         return false; // Not enough data to read a uint32_t
@@ -70,12 +84,7 @@ int32_t RedisServer::parseRequest(const std::string& raw_data, Request& parsed_r
 
 void RedisServer::executeRequest(const Request& request, Response& response) {
     if(request.command.empty()) {
-        response.status = RES_ERR;
-        const char* error_msg = "ERR empty command";
-        response.data.assign(
-            reinterpret_cast<const uint8_t*>(error_msg), 
-            reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
-        );
+        sendError(response, "ERR empty command");
         return;
     }
 
@@ -107,12 +116,7 @@ void RedisServer::handleUnknown(const Request& request, Response& response) {
 
 void RedisServer::handleSet(const Request& request, Response& response) {
     if(request.command.size() != 3) {
-        response.status = RES_ERR;
-        const char* error_msg = "ERR wrong number of arguments for 'set'";
-        response.data.assign(
-            reinterpret_cast<const uint8_t*>(error_msg), 
-            reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
-        );
+        sendError(response, "ERR wrong number of arguments for 'set'");
         return;
     }
 
@@ -134,22 +138,12 @@ void RedisServer::handleSet(const Request& request, Response& response) {
         dataStore.insert(std::move(new_entry));
     }
 
-    response.status = RES_OK;
-    const char* ok_msg = "+OK\r\n";
-    response.data.assign(
-        reinterpret_cast<const uint8_t*>(ok_msg),
-        reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
-    );
+    sendOK(response);
 }
 
 void RedisServer::handleGet(const Request& request, Response& response) {
     if(request.command.size() != 2) {
-        response.status = RES_ERR;
-        const char* error_msg = "ERR wrong number of arguments for 'get'";
-        response.data.assign(
-            reinterpret_cast<const uint8_t*>(error_msg),
-            reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
-        );
+        sendError(response, "ERR wrong number of arguments for 'get'");
         return;
     }
 
@@ -172,12 +166,7 @@ void RedisServer::handleGet(const Request& request, Response& response) {
 
 void RedisServer::handleDel(const Request& request, Response& response) {
     if(request.command.size() != 2) {
-        response.status = RES_ERR;
-        const char* error_msg = "ERR wrong number of arguments for 'del'";
-        response.data.assign(
-            reinterpret_cast<const uint8_t*>(error_msg),
-            reinterpret_cast<const uint8_t*>(error_msg) + strlen(error_msg)
-        );
+        sendError(response, "ERR wrong number of arguments for 'del'");
         return;
     }
 
@@ -191,12 +180,7 @@ void RedisServer::handleDel(const Request& request, Response& response) {
 
     dataStore.remove(&key_entry, equals);
     
-    response.status = RES_OK;
-    const char* ok_msg = "+OK\r\n";
-    response.data.assign(
-        reinterpret_cast<const uint8_t*>(ok_msg),
-        reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
-    );
+    sendOK(response);
 }
 
 // FNV-1a hash function for strings

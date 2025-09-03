@@ -111,6 +111,10 @@ private:
      */
     void executeRequest(const Request& request, Response& response);
 
+    void sendError(Response& response, const std::string& message);
+
+    void sendOK(Response& response);
+
     static uint64_t stringHash(const std::string& str);
 
     /**
