@@ -76,6 +76,16 @@ void RedisServer::executeRequest(const Request& request, Buffer& response) {
     }
 }
 
+void RedisServer::handleKeys(const Request& request, Buffer& response) {
+    (void) request;
+
+    ResponseBuilder::outArr(response, static_cast<uint32_t>(dataStore.size()));
+
+    dataStore.forEach([this, &response](HashTable::Node* node) {
+        ResponseBuilder::outStr(response, static_cast<DataEntry*>(node)->key);
+    });
+}
+
 void RedisServer::handlePing(const Request& request, Buffer& response) {
     (void) request; // Unused parameter
     if (request.command.size() > 2) {

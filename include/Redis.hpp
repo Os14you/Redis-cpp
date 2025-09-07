@@ -51,6 +51,7 @@ private:
     void handleGet(const Request& request, Buffer& response);
     void handleSet(const Request& request, Buffer& response);
     void handleDel(const Request& request, Buffer& response);
+    void handleKeys(const Request& request, Buffer& response);
     void handlePing(const Request& request, Buffer& response);
     void handleUnknown(const Request& request, Buffer& response);
 
