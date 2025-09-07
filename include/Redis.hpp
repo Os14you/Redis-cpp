@@ -2,14 +2,8 @@
 
 #include "Server.hpp"
 #include "HashTable.hpp"
+#include "Serialization.hpp"
 #include <algorithm>
-
-// Response status codes
-enum {
-    RES_OK = 0,
-    RES_ERR = 1,
-    RES_NX = 2, // Not found
-};
 
 // Structure to hold a parsed request command
 struct Request {
@@ -39,12 +33,6 @@ struct Request {
     }
 };
 
-// Response structure
-struct Response {
-    uint32_t status = RES_OK;
-    std::vector<uint8_t> data;
-};
-
 struct DataEntry: public HashTable::Node {
     std::string key;
     std::string value;
@@ -57,14 +45,14 @@ public:
 private:
     HashTable dataStore;
 
-    using CommandHandler = std::function<void(const Request&, Response&)>;
+    using CommandHandler = std::function<void(const Request&, Buffer&)>;
     std::unordered_map<std::string, CommandHandler> commandTable;
 
-    void handleGet(const Request& request, Response& response);
-    void handleSet(const Request& request, Response& response);
-    void handleDel(const Request& request, Response& response);
-    void handlePing(const Request& request, Response& response);
-    void handleUnknown(const Request& request, Response& response);
+    void handleGet(const Request& request, Buffer& response);
+    void handleSet(const Request& request, Buffer& response);
+    void handleDel(const Request& request, Buffer& response);
+    void handlePing(const Request& request, Buffer& response);
+    void handleUnknown(const Request& request, Buffer& response);
 
     /**
      * @brief Handles incoming requests from clients.
@@ -109,22 +97,7 @@ private:
      * @param response A reference to a Response object that will be populated
      * with the result of the command execution.
      */
-    void executeRequest(const Request& request, Response& response);
-
-    void sendError(Response& response, const std::string& message);
-
-    void sendOK(Response& response);
+    void executeRequest(const Request& request, Buffer& response);
 
     static uint64_t stringHash(const std::string& str);
-
-    /**
-     * @brief Serializes a Response object into a byte vector for network transmission.
-     * @details This converts the status code and data from the Response object
-     * into the length-prefixed format expected by the client.
-     *
-     * @param response The response object to serialize.
-     * @param output_buffer The byte vector where the serialized response will
-     * be appended.
-     */
-    void serializeResponse(const Response& response, std::vector<uint8_t>& output_buffer);
 };

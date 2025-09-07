@@ -4,42 +4,20 @@
 
 void RedisServer::onRequest(Connection& conn, const std::string& request) {
     Request parsed_request;
-    Response response;
+    Buffer response;
 
-    // 1. Parse the raw binary data from the client.
-    if (parseRequest(request, parsed_request) != 0) {
-        // If parsing fails, create a proper Response object for the error.
-        response.status = RES_ERR;
-        const char* msg = "ERR Protocol error";
-        response.data.assign(reinterpret_cast<const uint8_t*>(msg), reinterpret_cast<const uint8_t*>(msg) + strlen(msg));
+    if(parseRequest(request, parsed_request) != 0) {
+        ResponseBuilder::outErr(response, ERR_PROTOCOL, "Protocol error");
+        conn.want_close = true;
     } else {
-        // 2. If parsing succeeds, execute the command.
         executeRequest(parsed_request, response);
     }
 
-    // 3. ALWAYS serialize the final response object.
-    serializeResponse(response, conn.outgoing);
-
-    // If parsing failed, we still want to close the connection.
-    if (response.status != RES_OK && response.status != RES_NX) {
-        if (std::string(response.data.begin(), response.data.end()).find("Protocol error") != std::string::npos) {
-             conn.want_close = true;
-        }
+    if(!response.empty()) {
+        uint32_t total_len = static_cast<uint32_t>(response.size());
+        conn.appendOutgoing(reinterpret_cast<const uint8_t*>(&total_len), 4);
+        conn.appendOutgoing(response.data(), response.size());
     }
-}
-
-void RedisServer::sendError(Response& response, const std::string& message) {
-    response.status = RES_ERR;
-    response.data.assign(message.begin(), message.end());
-}
-
-void RedisServer::sendOK(Response& response) {
-    response.status = RES_OK;
-    const char* ok_msg = "+OK\r\n";
-    response.data.assign(
-        reinterpret_cast<const uint8_t*>(ok_msg),
-        reinterpret_cast<const uint8_t*>(ok_msg) + strlen(ok_msg)
-    );
 }
 
 bool RedisServer::parseUInt32(const char*& cursor, const char* buffer_end, uint32_t& value) {
@@ -82,9 +60,9 @@ int32_t RedisServer::parseRequest(const std::string& raw_data, Request& parsed_r
     return 0; // Successfully parsed the request
 }
 
-void RedisServer::executeRequest(const Request& request, Response& response) {
+void RedisServer::executeRequest(const Request& request, Buffer& response) {
     if(request.command.empty()) {
-        sendError(response, "ERR empty command");
+        ResponseBuilder::outErr(response, ERR_UNKNOWN_COMMAND, "Empty command");
         return;
     }
 
@@ -98,25 +76,27 @@ void RedisServer::executeRequest(const Request& request, Response& response) {
     }
 }
 
-void RedisServer::handlePing(const Request& request, Response& response) {
+void RedisServer::handlePing(const Request& request, Buffer& response) {
     (void) request; // Unused parameter
-    const char* pong_msg = "+PONG\r\n";
-    response.status = RES_OK;
-    response.data.assign(
-        reinterpret_cast<const uint8_t*>(pong_msg), 
-        reinterpret_cast<const uint8_t*>(pong_msg) + strlen(pong_msg)
-    );
+    if (request.command.size() > 2) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'ping'");
+        return;
+    }
+
+    if (request.command.size() == 1) {
+        ResponseBuilder::outStr(response, "PONG");
+    } else {
+        ResponseBuilder::outStr(response, request.command[1]);
+    }
 }
 
-void RedisServer::handleUnknown(const Request& request, Response& response) {
-    response.status = RES_ERR;
-    std::string error_msg = "ERR unknown command '" + request.command[0] + "'";
-    response.data.assign(error_msg.begin(), error_msg.end());
+void RedisServer::handleUnknown(const Request& request, Buffer& response) {
+    ResponseBuilder::outErr(response, ERR_UNKNOWN_COMMAND, "Unknown command '" + request.command[0] + "'");
 }
 
-void RedisServer::handleSet(const Request& request, Response& response) {
+void RedisServer::handleSet(const Request& request, Buffer& response) {
     if(request.command.size() != 3) {
-        sendError(response, "ERR wrong number of arguments for 'set'");
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'set'");
         return;
     }
 
@@ -138,12 +118,12 @@ void RedisServer::handleSet(const Request& request, Response& response) {
         dataStore.insert(std::move(new_entry));
     }
 
-    sendOK(response);
+    ResponseBuilder::outNil(response);
 }
 
-void RedisServer::handleGet(const Request& request, Response& response) {
+void RedisServer::handleGet(const Request& request, Buffer& response) {
     if(request.command.size() != 2) {
-        sendError(response, "ERR wrong number of arguments for 'get'");
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'get'");
         return;
     }
 
@@ -156,17 +136,15 @@ void RedisServer::handleGet(const Request& request, Response& response) {
     };
 
     if(HashTable::Node* found_node = dataStore.lookup(&key_entry, equals)) {
-        DataEntry* entry = static_cast<DataEntry*>(found_node);
-        response.data.assign(entry->value.begin(), entry->value.end());
-        response.status = RES_OK;
+        ResponseBuilder::outStr(response, static_cast<DataEntry*>(found_node)->value);
     } else {
-        response.status = RES_NX;
+        ResponseBuilder::outNil(response);
     }
 }
 
-void RedisServer::handleDel(const Request& request, Response& response) {
+void RedisServer::handleDel(const Request& request, Buffer& response) {
     if(request.command.size() != 2) {
-        sendError(response, "ERR wrong number of arguments for 'del'");
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'del'");
         return;
     }
 
@@ -178,9 +156,11 @@ void RedisServer::handleDel(const Request& request, Response& response) {
         return static_cast<DataEntry*>(node)->key == static_cast<DataEntry*>(key)->key;
     };
 
-    dataStore.remove(&key_entry, equals);
-    
-    sendOK(response);
+    if(dataStore.remove(&key_entry, equals)) {
+        ResponseBuilder::outInt(response, 1);
+    } else {
+        ResponseBuilder::outInt(response, 0);
+    }
 }
 
 // FNV-1a hash function for strings
@@ -193,38 +173,13 @@ uint64_t RedisServer::stringHash(const std::string& str) {
     return hash;
 }
 
-void RedisServer::serializeResponse(const Response& response, std::vector<uint8_t>& output_buffer) {
-    uint32_t payload_len = 4 + (uint32_t)response.data.size();
-
-    // 1. Append the total payload length (4 bytes).
-    output_buffer.insert(
-        output_buffer.end(), 
-        reinterpret_cast<const uint8_t*>(&payload_len), 
-        reinterpret_cast<const uint8_t*>(&payload_len) + 4
-    );
-
-    // 2. Append the status code (4 bytes).
-    output_buffer.insert(
-        output_buffer.end(),
-        reinterpret_cast<const uint8_t*>(&response.status),
-        reinterpret_cast<const uint8_t*>(&response.status) + 4
-    );
-
-    // 3. Append the actual response data (e.g., the value from a 'get').
-    output_buffer.insert(
-        output_buffer.end(),
-        response.data.begin(),
-        response.data.end()
-    );
-}
-
 /* ====== Public methods ====== */
 
 RedisServer::RedisServer(uint16_t port) : Server(port) {
     commandTable = {
-        {"get",  [this](const Request& req, Response& res) { handleGet(req, res);  }},
-        {"set",  [this](const Request& req, Response& res) { handleSet(req, res);  }},
-        {"del",  [this](const Request& req, Response& res) { handleDel(req, res);  }},
-        {"ping", [this](const Request& req, Response& res) { handlePing(req, res); }},
+        {"get",  [this](const Request& req, Buffer& res) { handleGet(req, res);  }},
+        {"set",  [this](const Request& req, Buffer& res) { handleSet(req, res);  }},
+        {"del",  [this](const Request& req, Buffer& res) { handleDel(req, res);  }},
+        {"ping", [this](const Request& req, Buffer& res) { handlePing(req, res); }},
     };
 }
