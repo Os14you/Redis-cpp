@@ -190,6 +190,7 @@ RedisServer::RedisServer(uint16_t port) : Server(port) {
         {"get",  [this](const Request& req, Buffer& res) { handleGet(req, res);  }},
         {"set",  [this](const Request& req, Buffer& res) { handleSet(req, res);  }},
         {"del",  [this](const Request& req, Buffer& res) { handleDel(req, res);  }},
+        {"keys", [this](const Request& req, Buffer& res) { handleKeys(req, res); }},
         {"ping", [this](const Request& req, Buffer& res) { handlePing(req, res); }},
     };
 }
