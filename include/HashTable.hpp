@@ -95,6 +95,13 @@ public:
      */
     void clear();
 
+    /**
+     * @brief Applies a function to every node in the hash table.
+     * @details This is used to implement commands like KEYS that need to iterate over all data.
+     * @param callback The function to execute for each node.
+     */
+    void forEach(const std::function<void(Node*)>& callback);
+
 private:
     /**
      * @struct Table
@@ -170,4 +177,6 @@ private:
      * migrated, the `olderTable` is cleared.
      */
     void helpRehashing();
+
+    void forEachInTable(Table& table, const std::function<void(Node*)>& callback);
 };

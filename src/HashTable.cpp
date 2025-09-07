@@ -72,6 +72,11 @@ void HashTable::helpRehashing() {
 
     size_t workDone = 0;
     while (workDone < REHASHING_WORK_LIMIT && olderTable.elementCount > 0) {
+        // Find a non-empty slot to migrate from
+        while (migrateIndex < olderTable.slots.size() && !olderTable.slots[migrateIndex]) {
+            migrateIndex++;
+        }
+
         if (migrateIndex >= olderTable.slots.size()) {
             // This should ideally not be hit if elementCount is tracked correctly.
             // It indicates we've scanned all slots but elements remain.
@@ -80,11 +85,6 @@ void HashTable::helpRehashing() {
         }
 
         std::unique_ptr<Node>* slotOwnerPtr = &olderTable.slots[migrateIndex];
-        if (!(*slotOwnerPtr)) {
-            migrateIndex++;
-            continue; // Skip empty slot
-        }
-
         // Move the node from the older table to the newer one.
         insertIntoTable(newerTable, detachNode(olderTable, slotOwnerPtr));
         workDone++;
@@ -94,6 +94,14 @@ void HashTable::helpRehashing() {
     if (olderTable.elementCount == 0) {
         olderTable.slots.clear();
         olderTable.mask = 0;
+    }
+}
+
+void HashTable::forEachInTable(Table& table, const std::function<void(Node*)>& callback) {
+    for(auto &slot: table.slots) {
+        for(Node* current = slot.get(); current; current = current->next.get()) {
+            callback(current);
+        }
     }
 }
 
@@ -150,6 +158,11 @@ std::unique_ptr<HashTable::Node> HashTable::remove(Node* key, const std::functio
 
 size_t HashTable::size() const {
     return newerTable.elementCount + olderTable.elementCount;
+}
+
+void HashTable::forEach(const std::function<void(Node*)>& callback) {
+    forEachInTable(newerTable, callback);
+    forEachInTable(olderTable, callback);
 }
 
 void HashTable::clear() {
