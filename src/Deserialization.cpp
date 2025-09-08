@@ -6,10 +6,10 @@ void printIndent(const int &lvl) {
     }
 }
 
-size_t printResponse(const Buffer &res, size_t offset, int indent = 0) {
+size_t printResponse(const Buffer &res, size_t offset, int indent) {
     if (offset >= res.size()) {
         std::cerr << "Error: offset out of bound" << std::endl;
-        return;
+        return 0;
     }
 
     const size_t init_offset = offset;
