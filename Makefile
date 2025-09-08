@@ -14,8 +14,8 @@ SRCS = $(wildcard $(SRC_DIR)/*.cpp)
 
 # Define object files for the server and client based on their source files
 # This creates a list of .o files that will be placed in the BUILD_DIR
-SERVER_OBJS = $(BUILD_DIR)/server-main.o $(BUILD_DIR)/Server.o $(BUILD_DIR)/Network.o $(BUILD_DIR)/Redis.o $(BUILD_DIR)/HashTable.o
-CLIENT_OBJS = $(BUILD_DIR)/redis-cli.o $(BUILD_DIR)/Client.o $(BUILD_DIR)/Network.o
+SERVER_OBJS = $(BUILD_DIR)/server-main.o $(BUILD_DIR)/Server.o $(BUILD_DIR)/Network.o $(BUILD_DIR)/Redis.o $(BUILD_DIR)/HashTable.o $(BUILD_DIR)/Serialization.o
+CLIENT_OBJS = $(BUILD_DIR)/redis-cli.o $(BUILD_DIR)/Client.o $(BUILD_DIR)/Network.o $(BUILD_DIR)/Deserialization.o
 
 # Executable names
 SERVER_TARGET = $(BIN_DIR)/redis-server
