@@ -139,4 +139,4 @@ The in-memory data is stored in a custom `HashTable` class. To handle resizing w
 
 ## 📄 License
 
-This project is open-source.
+This project is licensed under the **GNU General Public License v3.0**. A copy of the license is available in the `LICENSE` file in the repository.
