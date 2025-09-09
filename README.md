@@ -22,18 +22,17 @@ The repository is organized into the following directories:
 ``` bash
 .
 ├── include/
-│   └── redis_cpp/
-│       ├── common/     # Shared utilities (Serialization, Deserialization)
-│       ├── core/       # Core data structures (HashTable)
-│       ├── net/        # Networking library (Server, Client, Network)
-│       └── server/     # Redis application logic
+│   ├── common/     # Shared utilities (Serialization, Deserialization)
+│   ├── core/       # Core data structures (HashTable)
+│   ├── net/        # Networking library (Server, Client, Network)
+│   └── server/     # Redis application logic
 ├── src/
 │   ├── common/
 │   ├── core/
 │   ├── net/
 │   ├── server/
-│   ├── redis_cli.cpp   # Client entry point
-│   └── redis_server.cpp# Server entry point
+│   ├── redis-cli.cpp    # Client entry point
+│   └── server-main.cpp # Server entry point
 ├── bin/              # Compiled executables (created after build)
 ├── build/            # Object files (.o) (created after build)
 └── Makefile          # Build script
