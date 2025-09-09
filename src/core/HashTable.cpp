@@ -1,4 +1,4 @@
-#include <HashTable.hpp>
+#include <core/HashTable.hpp>
 
 /**
  * @file HashTable.cpp

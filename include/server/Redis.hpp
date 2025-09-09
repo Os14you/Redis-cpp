@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Server.hpp"
-#include "HashTable.hpp"
-#include "Serialization.hpp"
+#include "../net/Server.hpp"
+#include "../core/HashTable.hpp"
+#include "../common/Serialization.hpp"
 #include <algorithm>
 
 // Structure to hold a parsed request command

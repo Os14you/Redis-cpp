@@ -1,5 +1,5 @@
-#include <Client.hpp>
-#include <Deserialization.hpp>
+#include <net/Client.hpp>
+#include <common/Deserialization.hpp>
 #include <cstring>
 
 int main(int argc, char **argv) {

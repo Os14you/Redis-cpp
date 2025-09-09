@@ -1,4 +1,4 @@
-#include <Serialization.hpp>
+#include <common/Serialization.hpp>
 
 static void appendBuffer(Buffer &out, const void* data, size_t len) {
     const auto* ptr = static_cast<const uint8_t*>(data);
