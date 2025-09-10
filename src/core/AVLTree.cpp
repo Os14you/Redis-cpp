@@ -163,6 +163,66 @@ std::unique_ptr<AVLTree::Node> AVLTree::detach(Node* node) {
     }
 }
 
+void AVLTree::insert(std::unique_ptr<Node> new_node, const std::function<int(Node*, Node*)>& compare) {
+    if (!root) {
+        root = new_node.release();
+        return;
+    }
+
+    Node* current = root;
+    while (true) {
+        if (compare(new_node.get(), root) < 0) {
+            if (!current->left) {
+                current->left = new_node.release();
+                current->left->parent = current;
+                break;
+            }
+            current = current->left;
+        } else {
+            if (!current->right) {
+                current->right = new_node.release();
+                current->right->parent = current;
+                break;
+            }
+            current = current->right;
+        }
+    }
+
+    Node* unbalanced = current;
+    while (unbalanced) {
+        updateNode(unbalanced);
+        int balance_factor = getHight(unbalanced->left) - getHight(unbalanced->left);
+
+        Node* parent = unbalanced->parent;
+        Node** child_ptr = parent ? (parent->left == unbalanced ? &parent->left : &parent->right) : &root;
+
+        if (balance_factor > 1) {
+            *child_ptr = fixLeftImbalance(unbalanced);
+        } else if (balance_factor < -1) {
+            *child_ptr = fixRightImbalance(unbalanced);
+        }
+        unbalanced = parent;
+    }
+}
+
+AVLTree::Node* AVLTree::findByRank(int32_t rank) {
+    Node* current = root;
+
+    while (current) {
+        uint32_t left_size = getSubtreeSize(current->left);
+        if (rank == (int32_t)left_size) {
+            return current;
+        } else if (rank < (int32_t)left_size) {
+            current = current->left;
+        } else {
+            rank = rank - left_size - 1;
+            current = current->right;
+        }
+    }
+
+    return nullptr;
+}
+
 void AVLTree::clear() {
     deleteTree(root);
     root = nullptr;

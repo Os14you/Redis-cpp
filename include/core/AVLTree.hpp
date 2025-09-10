@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <cassert>
+#include <functional>
 
 class AVLTree {
 public:
@@ -22,6 +23,12 @@ public:
     std::unique_ptr<Node> detach(Node* node);
 
     void clear();
+
+    void insert(std::unique_ptr<Node> newNode, const std::function<int(Node*, Node*)>& compare);
+
+    Node* findByRank(int32_t rank);
+    
+    Node* getRoot() const { return root; }
 
 private:
     Node* root = nullptr;
