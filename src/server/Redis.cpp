@@ -146,7 +146,12 @@ void RedisServer::handleGet(const Request& request, Buffer& response) {
     };
 
     if(HashTable::Node* found_node = dataStore.lookup(&key_entry, equals)) {
-        ResponseBuilder::outStr(response, static_cast<DataEntry*>(found_node)->value);
+        DataEntry* entry = static_cast<DataEntry*>(found_node);
+        if (std::holds_alternative<std::string>(entry->value)) {
+            ResponseBuilder::outStr(response, std::get<std::string>(entry->value));
+        } else {
+            ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Operation against a key holding the wrong kind of value");
+        }
     } else {
         ResponseBuilder::outNil(response);
     }
@@ -190,7 +195,9 @@ RedisServer::RedisServer(uint16_t port) : Server(port) {
         {"get",  [this](const Request& req, Buffer& res) { handleGet(req, res);  }},
         {"set",  [this](const Request& req, Buffer& res) { handleSet(req, res);  }},
         {"del",  [this](const Request& req, Buffer& res) { handleDel(req, res);  }},
+        {"zadd", [this](const Request& req, Buffer& res) { handleZAdd(req, res); }}, 
         {"keys", [this](const Request& req, Buffer& res) { handleKeys(req, res); }},
         {"ping", [this](const Request& req, Buffer& res) { handlePing(req, res); }},
+        {"zrange", [this](const Request& req, Buffer& res) { handleZRange(req, res); }},
     };
 }

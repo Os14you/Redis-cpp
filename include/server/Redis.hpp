@@ -2,7 +2,9 @@
 
 #include "../net/Server.hpp"
 #include "../core/HashTable.hpp"
+#include "../core/ZSet.hpp"
 #include "../common/Serialization.hpp"
+#include <variant>
 #include <algorithm>
 
 // Structure to hold a parsed request command
@@ -35,7 +37,7 @@ struct Request {
 
 struct DataEntry: public HashTable::Node {
     std::string key;
-    std::string value;
+    std::variant<std::string, SortedSet> value;
 };
 
 class RedisServer : public Server {
@@ -51,8 +53,10 @@ private:
     void handleGet(const Request& request, Buffer& response);
     void handleSet(const Request& request, Buffer& response);
     void handleDel(const Request& request, Buffer& response);
+    void handleZAdd(const Request& request, Buffer& response);
     void handleKeys(const Request& request, Buffer& response);
     void handlePing(const Request& request, Buffer& response);
+    void handleZRange(const Request& request, Buffer& response);
     void handleUnknown(const Request& request, Buffer& response);
 
     /**
