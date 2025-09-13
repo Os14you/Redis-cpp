@@ -102,6 +102,12 @@ public:
      */
     void forEach(const std::function<void(Node*)>& callback);
 
+    HashTable(const HashTable&) = delete;
+    HashTable& operator=(const HashTable&) = delete;
+
+    HashTable(HashTable&&) = default;
+    HashTable& operator=(HashTable&&) = default;
+
 private:
     /**
      * @struct Table
