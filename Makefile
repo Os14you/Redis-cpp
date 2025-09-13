@@ -15,6 +15,7 @@ SRCS := \
     src/net/Server.cpp \
     src/net/Network.cpp \
     src/core/HashTable.cpp \
+    src/core/AVLTree.cpp \
     src/common/Serialization.cpp \
     \
     src/redis_cli.cpp \
@@ -27,7 +28,7 @@ SRCS := \
 OBJS = $(patsubst src/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
 
 # Define the object files required for each specific executable
-SERVER_OBJS = $(BUILD_DIR)/server-main.o $(BUILD_DIR)/server/Redis.o $(BUILD_DIR)/net/Server.o $(BUILD_DIR)/net/Network.o $(BUILD_DIR)/core/HashTable.o $(BUILD_DIR)/common/Serialization.o
+SERVER_OBJS = $(BUILD_DIR)/server-main.o $(BUILD_DIR)/server/Redis.o $(BUILD_DIR)/net/Server.o $(BUILD_DIR)/net/Network.o $(BUILD_DIR)/core/HashTable.o $(BUILD_DIR)/core/AVLTree.o $(BUILD_DIR)/common/Serialization.o
 CLIENT_OBJS = $(BUILD_DIR)/redis-cli.o $(BUILD_DIR)/net/Client.o $(BUILD_DIR)/net/Network.o $(BUILD_DIR)/common/Deserialization.o
 
 # Executable names
