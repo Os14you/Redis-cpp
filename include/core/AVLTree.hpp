@@ -30,8 +30,11 @@ public:
     
     Node* getRoot() const { return root; }
 
+    size_t size() const { return node_count; }
+
 private:
     Node* root = nullptr;
+    size_t node_count = 0;
 
     static uint32_t getHight(const Node* node);
     static uint32_t getSubtreeSize(const Node* node);

@@ -159,13 +159,15 @@ std::unique_ptr<AVLTree::Node> AVLTree::detach(Node* node) {
 
         node->left = node->right = node->parent = nullptr;
         updateNode(node);
-        return std::unique_ptr<Node>(node);
     }
+    --node_count;
+    return std::unique_ptr<Node>(node);
 }
 
 void AVLTree::insert(std::unique_ptr<Node> new_node, const std::function<int(Node*, Node*)>& compare) {
     if (!root) {
         root = new_node.release();
+        node_count = 1;
         return;
     }
 
@@ -187,6 +189,8 @@ void AVLTree::insert(std::unique_ptr<Node> new_node, const std::function<int(Nod
             current = current->right;
         }
     }
+
+    ++node_count;
 
     Node* unbalanced = current;
     while (unbalanced) {
@@ -226,4 +230,5 @@ AVLTree::Node* AVLTree::findByRank(int32_t rank) {
 void AVLTree::clear() {
     deleteTree(root);
     root = nullptr;
+    node_count = 0;
 }
