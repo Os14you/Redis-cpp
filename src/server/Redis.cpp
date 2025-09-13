@@ -178,6 +178,90 @@ void RedisServer::handleDel(const Request& request, Buffer& response) {
     }
 }
 
+void RedisServer::handleZAdd(const Request& request, Buffer& response) {
+    if (request.command.size() < 4 || request.command.size() % 2 != 0) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'zadd'");
+        return;
+    }
+
+    const std::string& key = request.command[1];
+    DataEntry key_entry;
+    key_entry.key = key;
+    key_entry.hashCode = stringHash(key);
+
+    auto equals = [](HashTable::Node* node, HashTable::Node* key) {
+        return static_cast<DataEntry*>(node)->key == static_cast<DataEntry*>(key)->key;
+    };
+
+    DataEntry* entry = nullptr;
+    if (HashTable::Node* found_node = dataStore.lookup(&key_entry, equals)) {
+        entry = static_cast<DataEntry*>(found_node);
+        if (!std::holds_alternative<SortedSet>(entry->value)) {
+            ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Operation against a key holding the wrong kind of value");
+            return;
+        }
+    } else {
+        auto new_entry = std::make_unique<DataEntry>();
+        new_entry->key = key;
+        new_entry->value = SortedSet{};
+        new_entry->hashCode = key_entry.hashCode;
+        entry = new_entry.get();
+        dataStore.insert(std::move(new_entry));
+    }
+
+    SortedSet &zset = std::get<SortedSet>(entry->value);
+    int elements = 0;
+
+    for (size_t i=2; i<request.command.size(); i+=2) {
+        const std::string &score_str = request.command[i];
+        const std::string &member = request.command[i+1];
+
+        double score;
+        try {
+            score = std::stod(score_str);
+        } catch (const std::invalid_argument &e) {
+            ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "value \'" + request.command[i] + "\' is not a valid float");
+            return;
+        }
+
+        ZSetMemberNode member_key;
+        member_key.member = member;
+        member_key.hashCode = stringHash(member);
+        auto member_equals = [](HashTable::Node* node, HashTable::Node* key) {
+            return static_cast<ZSetMemberNode*>(node)->member == static_cast<ZSetMemberNode*>(key)->member;
+        };
+
+        if (auto* found_member_node = zset.member_to_score_map.lookup(&member_key, member_equals)) {
+            static_cast<ZSetMemberNode*>(found_member_node)->score = score;
+        } else {
+            auto new_member_node = std::make_unique<ZSetMemberNode>();
+            new_member_node->member = member;
+            new_member_node->score = score;
+            new_member_node->hashCode = member_key.hashCode;
+            zset.member_to_score_map.insert(std::move(new_member_node));
+        }
+
+        auto new_zset_node = std::make_unique<ZSetNode>();
+        new_zset_node->member = member;
+        new_zset_node->score = score;
+
+        auto compare_nodes = [](AVLTree::Node* a, AVLTree::Node* b) {
+            double score_a = static_cast<ZSetNode*>(a)->score;
+            double score_b = static_cast<ZSetNode*>(b)->score;
+
+            if (score_a < score_b) return -1;
+            if (score_a > score_b) return  1;
+
+            return static_cast<ZSetNode*>(a)->member.compare(static_cast<ZSetNode*>(b)->member);
+        };
+
+        zset.score_sorted_tree.insert(std::move(new_zset_node), compare_nodes);
+        ++elements;
+    }
+
+    ResponseBuilder::outInt(response, elements);
+}
+
 // FNV-1a hash function for strings
 uint64_t RedisServer::stringHash(const std::string& str) {
     uint64_t hash = 0xcdf29ce484222325;
