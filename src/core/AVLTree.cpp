@@ -173,7 +173,7 @@ void AVLTree::insert(std::unique_ptr<Node> new_node, const std::function<int(Nod
 
     Node* current = root;
     while (true) {
-        if (compare(new_node.get(), root) < 0) {
+        if (compare(new_node.get(), current) < 0) {
             if (!current->left) {
                 current->left = new_node.release();
                 current->left->parent = current;
@@ -195,7 +195,7 @@ void AVLTree::insert(std::unique_ptr<Node> new_node, const std::function<int(Nod
     Node* unbalanced = current;
     while (unbalanced) {
         updateNode(unbalanced);
-        int balance_factor = getHight(unbalanced->left) - getHight(unbalanced->left);
+        int balance_factor = getHight(unbalanced->left) - getHight(unbalanced->right);
 
         Node* parent = unbalanced->parent;
         Node** child_ptr = parent ? (parent->left == unbalanced ? &parent->left : &parent->right) : &root;
