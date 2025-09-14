@@ -212,6 +212,16 @@ void RedisServer::handleZAdd(const Request& request, Buffer& response) {
     SortedSet &zset = std::get<SortedSet>(entry->value);
     int elements = 0;
 
+    auto compare_nodes = [](AVLTree::Node* a, AVLTree::Node* b) {
+        double score_a = static_cast<ZSetNode*>(a)->score;
+        double score_b = static_cast<ZSetNode*>(b)->score;
+
+        if (score_a < score_b) return -1;
+        if (score_a > score_b) return  1;
+
+        return static_cast<ZSetNode*>(a)->member.compare(static_cast<ZSetNode*>(b)->member);
+    };
+
     for (size_t i=2; i<request.command.size(); i+=2) {
         const std::string &score_str = request.command[i];
         const std::string &member = request.command[i+1];
@@ -220,6 +230,7 @@ void RedisServer::handleZAdd(const Request& request, Buffer& response) {
         try {
             score = std::stod(score_str);
         } catch (const std::invalid_argument &e) {
+            response.clear();
             ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "value \'" + request.command[i] + "\' is not a valid float");
             return;
         }
@@ -231,32 +242,31 @@ void RedisServer::handleZAdd(const Request& request, Buffer& response) {
             return static_cast<ZSetMemberNode*>(node)->member == static_cast<ZSetMemberNode*>(key)->member;
         };
 
-        if (auto* found_member_node = zset.member_to_score_map.lookup(&member_key, member_equals)) {
-            static_cast<ZSetMemberNode*>(found_member_node)->score = score;
+        if (auto* found_ptr = zset.member_to_score_map.lookup(&member_key, member_equals)) {
+            auto* member_node = static_cast<ZSetMemberNode*>(found_ptr);
+
+            auto old_zset_node_key = std::make_unique<ZSetNode>();
+            old_zset_node_key->member = member;
+            old_zset_node_key->score = member_node->score;
+
+            if (AVLTree::Node* to_remove = zset.score_sorted_tree.find(old_zset_node_key.get(), compare_nodes)) {
+                zset.score_sorted_tree.detach(to_remove);
+            }
+
+            member_node->score = score;
         } else {
             auto new_member_node = std::make_unique<ZSetMemberNode>();
             new_member_node->member = member;
             new_member_node->score = score;
             new_member_node->hashCode = member_key.hashCode;
             zset.member_to_score_map.insert(std::move(new_member_node));
+            ++elements;
         }
 
         auto new_zset_node = std::make_unique<ZSetNode>();
         new_zset_node->member = member;
         new_zset_node->score = score;
-
-        auto compare_nodes = [](AVLTree::Node* a, AVLTree::Node* b) {
-            double score_a = static_cast<ZSetNode*>(a)->score;
-            double score_b = static_cast<ZSetNode*>(b)->score;
-
-            if (score_a < score_b) return -1;
-            if (score_a > score_b) return  1;
-
-            return static_cast<ZSetNode*>(a)->member.compare(static_cast<ZSetNode*>(b)->member);
-        };
-
         zset.score_sorted_tree.insert(std::move(new_zset_node), compare_nodes);
-        ++elements;
     }
 
     ResponseBuilder::outInt(response, elements);
