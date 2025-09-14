@@ -455,6 +455,72 @@ void RedisServer::handleZScore(const Request& request, Buffer& response) {
     }
 }
 
+void RedisServer::handleZRevRange(const Request& request, Buffer& response) {
+    if (request.command.size() != 3) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'zrevrange'");
+        return;
+    }
+
+    const std::string& key = request.command[1];
+    long start, end;
+
+    try {
+        start = std::stol(request.command[2]);
+        end = std::stol(request.command[3]);
+    } catch (const std::invalid_argument &e) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "values provided (" + request.command[2] + ", " + request.command[3] + ") are not an integer");
+        return;
+    }
+
+    DataEntry key_entry;
+    key_entry.key = key;
+    key_entry.hashCode = stringHash(key);
+
+    auto equals = [](HashTable::Node* node, HashTable::Node* key) {
+        return static_cast<DataEntry*>(node)->key == static_cast<DataEntry*>(key)->key;
+    };
+
+    DataEntry* entry = nullptr;
+    if (HashTable::Node* found_node = dataStore.lookup(&key_entry, equals)) {
+        entry = static_cast<DataEntry*>(found_node);
+    } else {
+        ResponseBuilder::outArr(response, 0);
+        return;
+    }
+
+    if (!std::holds_alternative<SortedSet>(entry->value)) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Operation against a key holding the wrong type of value");
+        return;
+    }
+
+    SortedSet& zset = std::get<SortedSet>(entry->value);
+    long size = zset.score_sorted_tree.size();
+
+    if (start < 0) start += size;
+    if (end < 0) end += size;
+    if (start < 0) start = 0;
+
+    if (start >= size || start > end) {
+        ResponseBuilder::outArr(response, 0);
+        return;
+    }
+
+    if (end >= size) end = size - 1;
+
+    std::vector<std::string> result;
+    for (long i=start; i<=end; ++i) {
+        long rank = size - 1 - i;
+        if (AVLTree::Node* node = zset.score_sorted_tree.findByRank(rank)) {
+            result.push_back(static_cast<ZSetNode*>(node)->member);
+        }
+    }
+
+    ResponseBuilder::outArr(response, result.size());
+    for (const auto& member: result) {
+        ResponseBuilder::outStr(response, member);
+    }
+}
+
 // FNV-1a hash function for strings
 uint64_t RedisServer::stringHash(const std::string& str) {
     uint64_t hash = 0xcdf29ce484222325;
@@ -478,5 +544,6 @@ RedisServer::RedisServer(uint16_t port) : Server(port) {
         {"ping", [this](const Request& req, Buffer& res) { handlePing(req, res); }},
         {"zrange", [this](const Request& req, Buffer& res) { handleZRange(req, res); }},
         {"zscore", [this](const Request& req, Buffer& res) { handleZScore(req, res); }},
+        {"zrevrange", [this](const Request& req, Buffer& res) { handleZRevRange(req, res); }},
     };
 }

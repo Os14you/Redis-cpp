@@ -60,6 +60,7 @@ private:
     void handleZRange(const Request& request, Buffer& response);
     void handleZScore(const Request& request, Buffer& response);
     void handleUnknown(const Request& request, Buffer& response);
+    void handleZRevRange(const Request& request, Buffer& response);
 
     /**
      * @brief Handles incoming requests from clients.
