@@ -180,7 +180,7 @@ void RedisServer::handleDel(const Request& request, Buffer& response) {
 
 void RedisServer::handleZAdd(const Request& request, Buffer& response) {
     if (request.command.size() < 4 || request.command.size() % 2 != 0) {
-        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'zadd'");
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "c");
         return;
     }
 
@@ -272,6 +272,77 @@ void RedisServer::handleZAdd(const Request& request, Buffer& response) {
     ResponseBuilder::outInt(response, elements);
 }
 
+void RedisServer::handleZRem(const Request& request, Buffer& response) {
+    if (request.command.size() < 3) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of args for 'zrem'");
+        return;
+    }
+
+    const std::string& key = request.command[1];
+    DataEntry key_entry;
+    key_entry.key = key;
+    key_entry.hashCode = stringHash(key);
+
+    auto equals = [](HashTable::Node* node, HashTable::Node* key) {
+        return static_cast<DataEntry*>(node)->key == static_cast<DataEntry*>(key)->key;
+    };
+
+    DataEntry* entry = nullptr;
+    if (HashTable::Node* found_node = dataStore.lookup(&key_entry, equals)) {
+        entry = static_cast<DataEntry*>(found_node);
+    } else {
+        ResponseBuilder::outInt(response, 0);
+        return;
+    }
+
+    if (!std::holds_alternative<SortedSet>(entry->value)) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Operation against a key holding the wrong kind of value");
+        return;
+    }
+
+    SortedSet& zset = std::get<SortedSet>(entry->value);
+    int removed_count = 0;
+    
+    auto compare_nodes = [](AVLTree::Node* a, AVLTree::Node* b) {
+        double score_a = static_cast<ZSetNode*>(a)->score;
+        double score_b = static_cast<ZSetNode*>(b)->score;
+
+        if (score_a < score_b) return -1;
+        if (score_a > score_b) return  1;
+
+        return static_cast<ZSetNode*>(a)->member.compare(static_cast<ZSetNode*>(b)->member);
+    };
+
+    for (size_t i=2; i<request.command.size(); i+=2) {
+        const std::string& member = request.command[i];
+
+        ZSetMemberNode member_key;
+        member_key.member = member;
+        member_key.hashCode = stringHash(member);
+
+        auto member_equals = [](HashTable::Node* node, HashTable::Node* key) {
+            return static_cast<ZSetMemberNode*>(node)->member == static_cast<ZSetMemberNode*>(key)->member;
+        };
+
+        if (auto* found_ptr = zset.member_to_score_map.lookup(&member_key, member_equals)) {
+            auto* member_node = static_cast<ZSetMemberNode*>(found_ptr);
+            
+            auto old_zset_node_key = std::make_unique<ZSetNode>();
+            old_zset_node_key->member = member;
+            old_zset_node_key->score = member_node->score;
+            
+            if (AVLTree::Node* to_remove = zset.score_sorted_tree.find(old_zset_node_key.get(), compare_nodes)) {
+                zset.score_sorted_tree.detach(to_remove);
+            }
+
+            zset.member_to_score_map.remove(&member_key, member_equals);
+            ++removed_count;
+        }
+    }
+
+    ResponseBuilder::outInt(response, removed_count);
+}
+
 void RedisServer::handleZRange(const Request& request, Buffer& response) {
     if (request.command.size() != 4) {
         ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'zrange'");
@@ -354,6 +425,7 @@ RedisServer::RedisServer(uint16_t port) : Server(port) {
         {"set",  [this](const Request& req, Buffer& res) { handleSet(req, res);  }},
         {"del",  [this](const Request& req, Buffer& res) { handleDel(req, res);  }},
         {"zadd", [this](const Request& req, Buffer& res) { handleZAdd(req, res); }}, 
+        {"zrem", [this](const Request& req, Buffer& res) { handleZRem(req, res); }}, 
         {"keys", [this](const Request& req, Buffer& res) { handleKeys(req, res); }},
         {"ping", [this](const Request& req, Buffer& res) { handlePing(req, res); }},
         {"zrange", [this](const Request& req, Buffer& res) { handleZRange(req, res); }},

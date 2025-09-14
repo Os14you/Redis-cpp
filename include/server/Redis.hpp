@@ -54,6 +54,7 @@ private:
     void handleSet(const Request& request, Buffer& response);
     void handleDel(const Request& request, Buffer& response);
     void handleZAdd(const Request& request, Buffer& response);
+    void handleZRem(const Request& request, Buffer& response);
     void handleKeys(const Request& request, Buffer& response);
     void handlePing(const Request& request, Buffer& response);
     void handleZRange(const Request& request, Buffer& response);
