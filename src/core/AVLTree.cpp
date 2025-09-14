@@ -227,6 +227,23 @@ AVLTree::Node* AVLTree::findByRank(int32_t rank) {
     return nullptr;
 }
 
+AVLTree::Node* AVLTree::find(Node* key, const std::function<int(Node*, Node*)>& compare) {
+    Node* current = root;
+
+    while (current) {
+        int cmp = compare(key, current);
+        if (cmp == 0) {
+            return current;
+        } else if (cmp < 0) {
+            current = current->left;
+        } else {
+            current = current->right;
+        }
+    }
+
+    return nullptr;
+}
+
 void AVLTree::clear() {
     deleteTree(root);
     root = nullptr;

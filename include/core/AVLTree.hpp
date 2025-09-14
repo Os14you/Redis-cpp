@@ -27,7 +27,9 @@ public:
     void insert(std::unique_ptr<Node> newNode, const std::function<int(Node*, Node*)>& compare);
 
     Node* findByRank(int32_t rank);
-    
+
+    Node* find(Node* key, const std::function<int(Node*, Node*)> &compare);
+
     Node* getRoot() const { return root; }
 
     size_t size() const { return node_count; }
