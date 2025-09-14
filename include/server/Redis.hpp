@@ -58,6 +58,7 @@ private:
     void handleKeys(const Request& request, Buffer& response);
     void handlePing(const Request& request, Buffer& response);
     void handleZRange(const Request& request, Buffer& response);
+    void handleZScore(const Request& request, Buffer& response);
     void handleUnknown(const Request& request, Buffer& response);
 
     /**

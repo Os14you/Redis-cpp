@@ -407,6 +407,54 @@ void RedisServer::handleZRange(const Request& request, Buffer& response) {
     }
 }
 
+void RedisServer::handleZScore(const Request& request, Buffer& response) {
+    if (request.command.size() != 3) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Wrong number of arguments for 'zscore'");
+        return;
+    }
+
+    const std::string& key = request.command[1];
+    const std::string& member = request.command[2];
+
+    DataEntry key_entry;
+    key_entry.key = key;
+    key_entry.hashCode = stringHash(key);
+
+    auto equals = [](HashTable::Node* node, HashTable::Node* key) {
+        return static_cast<DataEntry*>(node)->key == static_cast<DataEntry*>(key)->key;
+    };
+
+    DataEntry* entry = nullptr;
+    if (HashTable::Node* found_node = dataStore.lookup(&key_entry, equals)) {
+        entry = static_cast<DataEntry*>(found_node);
+    } else {
+        ResponseBuilder::outNil(response);
+        return;
+    }
+
+    if (!std::holds_alternative<SortedSet>(entry->value)) {
+        ResponseBuilder::outErr(response, ERR_WRONG_ARGS, "Operation against a key holding the wrong type of value");
+        return;
+    }
+
+    SortedSet& zset = std::get<SortedSet>(entry->value);
+
+    ZSetMemberNode member_key;
+    member_key.member = member;
+    member_key.hashCode = stringHash(member);
+
+    auto member_equals = [](HashTable::Node* node, HashTable::Node* key) {
+        return static_cast<ZSetMemberNode*>(node)->member == static_cast<ZSetMemberNode*>(key)->member;
+    };
+
+    if (auto* found_ptr = zset.member_to_score_map.lookup(&member_key, member_equals)) {
+        auto* member_node = static_cast<ZSetMemberNode*>(found_ptr);
+        ResponseBuilder::outStr(response, std::to_string(member_node->score));
+    } else {
+        ResponseBuilder::outNil(response);
+    }
+}
+
 // FNV-1a hash function for strings
 uint64_t RedisServer::stringHash(const std::string& str) {
     uint64_t hash = 0xcdf29ce484222325;
@@ -429,5 +477,6 @@ RedisServer::RedisServer(uint16_t port) : Server(port) {
         {"keys", [this](const Request& req, Buffer& res) { handleKeys(req, res); }},
         {"ping", [this](const Request& req, Buffer& res) { handlePing(req, res); }},
         {"zrange", [this](const Request& req, Buffer& res) { handleZRange(req, res); }},
+        {"zscore", [this](const Request& req, Buffer& res) { handleZScore(req, res); }},
     };
 }
