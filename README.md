@@ -5,15 +5,36 @@ This project is a lightweight, high-performance, in-memory key-value store inspi
 ## ✨ Features
 
 - **Asynchronous Networking:** A single-threaded, event-driven server built using the poll() system call for high-concurrency I/O without the overhead of threads.
-- **Efficient Data Storage:** A custom-built hash table that uses incremental rehashing to avoid long pauses and latency spikes when the table needs to be resized.
-- **Client-Server Architecture:** Includes both a server (redis-server) and a command-line client (redis-cli) for interaction.
+- **Efficient Data Structures:**
+  - A custom-built **Hash Table** that uses incremental rehashing to avoid long pauses and latency spikes when the table needs to be resized.
+  - A self-balancing **AVL Tree** to maintain sorted data and enable efficient rank-based queries.
+- **Multiple Data Types:** Support for common Redis data types:
+  - **Strings:** Basic key-value pairs.
+  - **Sorted Sets (ZSETs):** A collection of unique members, each associated with a score, ordered by that score. Implemented with a hash table and an AVL tree for optimal performance.
+- **Client-Server Architecture:** Includes both a server (`redis-server`) and a command-line client (`redis-cli`) for interaction.
 - **Simple Binary Protocol:** A custom, lightweight, length-prefixed binary protocol for efficient communication between the client and server.
-- **Core Redis Commands:** Implementation of several essential Redis commands (non-case sensitive):
-  - `SET <key> <value>`
-  - `GET <key>`
-  - `DEL <key>`
-  - `KEYS`
-  - `PING [message]`
+- **Core Redis Commands:** Implementation of several essential Redis commands (non-case sensitive), listed below.
+
+## ⌨️ Supported Commands
+
+### General
+
+- `KEYS`: Returns all keys in the database.
+- `DEL <key>`: Deletes a key.
+- `PING [message]`: Checks server responsiveness.
+
+### String
+
+- `SET <key> <value>`: Sets the string value of a key.
+- `GET <key>`: Gets the value of a key.
+
+### Sorted Set (ZSET)
+
+- `ZADD <key> <score> <member> [<score> <member> ...]`: Adds one or more members to a sorted set, or updates its score if it already exists.
+- `ZREM <key> <member> [<member> ...]`: Removes one or more members from a sorted set.
+- `ZRANGE <key> <start> <end>`: Returns the specified range of members in the sorted set, ordered from low to high scores.
+- `ZREVRANGE <key> <start> <end>`: Returns the specified range of members, ordered from high to low scores.
+- `ZSCORE <key> <member>`: Returns the score of a member in a sorted set.
 
 ## 🏗️ Project Structure
 
@@ -32,7 +53,7 @@ The repository is organized into the following directories:
 │   ├── net/
 │   ├── server/
 │   ├── redis-cli.cpp    # Client entry point
-│   └── server-main.cpp # Server entry point
+│   └── server-main.cpp  # Server entry point
 ├── bin/              # Compiled executables (created after build)
 ├── build/            # Object files (.o) (created after build)
 └── Makefile          # Build script
@@ -79,54 +100,52 @@ Server listening on port 6379 ...
 
 Open a new terminal and use the `redis-cli` to interact with the server. Here are some example commands:
 
-#### SET: Store a key-value pair
+#### String Commands
 
-``` bash
+```bash
+# SET: Store a key-value pair
 $ ./bin/redis-cli SET myKey "Hello C++"
-> SET "myKey" "Hello C++" 
+> SET myKey "Hello C++" 
 (nil)
-```
 
-#### GET: Retrieve the value for a key
-
-``` bash
+# GET: Retrieve the value for a key
 $ ./bin/redis-cli GET myKey
-> GET "myKey" 
+> GET myKey 
 "Hello C++"
 ```
 
-#### KEYS: List all keys in the store
+#### Sorted Set Commands
 
-``` bash
-$ ./bin/redis-cli SET anotherKey 123
-> SET "anotherKey" "123" 
-(nil)
+```bash
+# ZADD: Add members to a sorted set
+$ ./bin/redis-cli ZADD leaderboard 100 alice 200 bob 150 charlie
+> ZADD leaderboard 100 alice 200 bob 150 charlie
+(integer) 3
 
-$ ./bin/redis-cli KEYS
-> KEYS 
-(arr) 2 elements:
- "anotherKey"
- "myKey"
-```
+# ZRANGE: Get members by rank (ordered by score)
+$ ./bin/redis-cli ZRANGE leaderboard 0 -1
+> ZRANGE leaderboard 0 -1
+(arr) 3 elements:
+ "alice"
+ "charlie"
+ "bob"
 
-#### DEL: Delete a key
+# ZSCORE: Get the score of a specific member
+$ ./bin/redis-cli ZSCORE leaderboard charlie
+> ZSCORE leaderboard charlie
+"150.000000"
 
-``` bash
-$ ./bin/redis-cli DEL myKey
-> DEL "myKey" 
+# ZREM: Remove a member
+$ ./bin/redis-cli ZREM leaderboard alice
+> ZREM leaderboard alice
 (integer) 1
-```
 
-#### PING: Check if the server is responsive
-
-``` bash
-$ ./bin/redis-cli PING
-> PING 
-"PONG"
-
-$ ./bin/redis-cli PING "Is anyone there?"
-> PING "Is anyone there?" 
-"Is anyone there?"
+# Check the set again
+$ ./bin/redis-cli ZRANGE leaderboard 0 -1
+> ZRANGE leaderboard 0 -1
+(arr) 2 elements:
+ "charlie"
+ "bob"
 ```
 
 ### Cleaning Up
@@ -143,9 +162,14 @@ make clean
 
 The server operates on a single thread, using an event loop powered by `poll()`. This allows it to manage multiple client connections concurrently without blocking. All I/O operations are non-blocking, ensuring that the server remains responsive even under load. The core logic is contained within the `Server::run()` method.
 
-### Data Storage: Hash Table with Incremental Rehashing
+### Data Storage
 
-The in-memory data is stored in a custom `HashTable` class. To handle resizing without causing performance degradation, the hash table implements **incremental rehashing**. When the table's load factor exceeds a certain threshold, a new, larger table is created. Instead of moving all entries at once (which would block the server), entries are migrated gradually from the old table to the new one with every subsequent `insert`, `lookup`, or `remove` operation. This amortizes the cost of resizing over many operations, leading to smoother performance.
+The in-memory data store is built on a primary `HashTable` that maps string keys to values. The values are stored in a `std::variant`, allowing each key to hold different data types, such as a simple string or a complex `SortedSet`.
+
+- **Hash Table with Incremental Rehashing:** The primary key-value store. To handle resizing without causing performance degradation, it implements **incremental rehashing**. When the table's load factor exceeds a threshold, entries are migrated gradually from the old table to a new, larger one with every subsequent operation. This amortizes the cost of resizing, leading to smoother performance.
+- **Sorted Set Implementation:** The `SortedSet` data type is implemented using a combination of two data structures for maximum efficiency:
+  - A **Hash Table** maps members to their scores, providing $O(1)$ average time complexity for score lookups (`ZSCORE`).
+  - A self-balancing **AVL Tree** stores members sorted by their scores, enabling efficient $O(log N)$ operations for adding, removing, and executing range queries (`ZADD`, `ZREM`, `ZRANGE`).
 
 ## 📄 License
 
